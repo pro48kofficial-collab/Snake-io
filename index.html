@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Snake Battle Arena</title>
+
+<style>
+body {
+    margin: 0;
+    font-family: Arial;
+    background: #0b1020;
+    overflow: hidden;
+    color: white;
+}
+
+.screen {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+}
+
+.active { display: flex; }
+
+button {
+    padding: 12px 18px;
+    margin: 6px;
+    border: none;
+    border-radius: 10px;
+    background: #1e90ff;
+    color: white;
+    font-size: 16px;
+}
+
+input {
+    padding: 10px;
+    margin: 5px;
+    border-radius: 8px;
+    border: none;
+}
+
+#avatarPreview {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    margin: 10px;
+    border: 2px solid white;
+    object-fit: cover;
+}
+
+canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+#hud {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 10;
+}
+</style>
+</head>
+
+<body>
+
+<!-- MENU -->
+<div id="menu" class="screen active">
+    <h2>🐍 Snake Battle</h2>
+
+    <img id="avatarPreview" style="display:none">
+
+    <input id="nickname" placeholder="Введи нік">
+    <input type="file" id="avatarInput">
+
+    <p>Coins: <span id="coins">0</span></p>
+
+    <button onclick="startGame()">Грати</button>
+    <button onclick="openShop()">Магазин</button>
+</div>
+
+<!-- SHOP -->
+<div id="shop" class="screen">
+    <h2>Магазин</h2>
+
+    <button onclick="buySkin('cyan',10)">Cyan (10)</button>
+    <button onclick="buySkin('red',20)">Red (20)</button>
+    <button onclick="buySkin('yellow',30)">Yellow (30)</button>
+
+    <button onclick="backMenu()">Назад</button>
+</div>
+
+<!-- GAME -->
+<div id="game" class="screen">
+    <div id="hud">Coins: <span id="hudCoins"></span></div>
+    <canvas id="canvas"></canvas>
+</div>
+
+<script>
+
+const menu = document.getElementById("menu");
+const shop = document.getElementById("shop");
+const game = document.getElementById("game");
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// ===== SAVE =====
+let coins = +localStorage.getItem("coins") || 0;
+let skin = localStorage.getItem("skin") || "cyan";
+let nickname = localStorage.getItem("nickname") || "";
+
+document.getElementById("coins").innerText = coins;
+document.getElementById("nickname").value = nickname;
+
+// avatar
+let avatar = localStorage.getItem("avatar");
+if(avatar){
+    document.getElementById("avatarPreview").src = avatar;
+    document.getElementById("avatarPreview").style.display = "block";
+}
+
+// nickname save
+document.getElementById("nickname").oninput = e=>{
+    localStorage.setItem("nickname", e.target.value);
+};
+
+// avatar upload
+document.getElementById("avatarInput").onchange = e=>{
+    let file = e.target.files[0];
+    let reader = new FileReader();
+    reader.onload = function(){
+        avatar = reader.result;
+        localStorage.setItem("avatar", avatar);
+        document.getElementById("avatarPreview").src = avatar;
+        document.getElementById("avatarPreview").style.display = "block";
+    }
+    reader.readAsDataURL(file);
+};
+
+// ===== NAV =====
+function startGame(){
+    menu.classList.remove("active");
+    game.classList.add("active");
+    initGame();
+}
+
+function openShop(){
+    menu.classList.remove("active");
+    shop.classList.add("active");
+}
+
+function backMenu(){
+    shop.classList.remove("active");
+    menu.classList.add("active");
+}
+
+// ===== SHOP =====
+function buySkin(color, price){
+    if(coins >= price){
+        coins -= price;
+        skin = color;
+        save();
+        alert("Куплено!");
+    } else alert("Нема коінів");
+}
+
+// ===== SAVE =====
+function save(){
+    localStorage.setItem("coins", coins);
+    localStorage.setItem("skin", skin);
+    document.getElementById("coins").innerText = coins;
+}
+
+// ===== GAME STATE =====
+let snake, food, bots;
+let alive = true;
+
+// ===== INIT GAME =====
+function initGame(){
+
+alive = true;
+
+snake = {
+    x: 300,
+    y: 300,
+    angle: 0,
+    body: []
+};
+
+food = [];
+for(let i=0;i<70;i++){
+    food.push({
+        x: Math.random()*canvas.width,
+        y: Math.random()*canvas.height
+    });
+}
+
+bots = [];
+for(let i=0;i<6;i++){
+    bots.push({
+        x: Math.random()*canvas.width,
+        y: Math.random()*canvas.height,
+        angle: Math.random()*Math.PI*2,
+        body: [],
+        color: ["red","yellow","purple","orange","blue"][i]
+    });
+}
+
+requestAnimationFrame(loop);
+}
+
+// ===== CONTROL =====
+document.addEventListener("mousemove", e=>{
+    snake.angle = Math.atan2(e.clientY - snake.y, e.clientX - snake.x);
+});
+
+document.addEventListener("touchmove", e=>{
+    let t = e.touches[0];
+    snake.angle = Math.atan2(t.clientY - snake.y, t.clientX - snake.x);
+});
+
+// ===== DIE PLAYER =====
+function die(){
+    alive = false;
+    coins += 10;
+    save();
+
+    setTimeout(()=>{
+        alert("Ти помер 💀 +10 коінів");
+        backMenu();
+    },200);
+}
+
+// ===== LOOP =====
+function loop(){
+
+if(!alive) return;
+
+// MOVE PLAYER
+snake.x += Math.cos(snake.angle)*3;
+snake.y += Math.sin(snake.angle)*3;
+
+snake.body.push({x:snake.x,y:snake.y});
+if(snake.body.length > 50) snake.body.shift();
+
+// FOOD
+for(let i=0;i<food.length;i++){
+    let f = food[i];
+    let dx = snake.x - f.x;
+    let dy = snake.y - f.y;
+
+    if(Math.sqrt(dx*dx+dy*dy) < 10){
+        food.splice(i,1);
+        food.push({
+            x: Math.random()*canvas.width,
+            y: Math.random()*canvas.height
+        });
+
+        snake.body.push({x:snake.x,y:snake.y});
+        coins++;
+        save();
+    }
+}
+
+// BOT MOVE
+for(let i=0;i<bots.length;i++){
+    let b = bots[i];
+
+    b.angle += (Math.random()-0.5)*0.2;
+    b.x += Math.cos(b.angle)*2;
+    b.y += Math.sin(b.angle)*2;
+
+    b.body.push({x:b.x,y:b.y});
+    if(b.body.length > 35) b.body.shift();
+}
+
+// ===== COLLISION (PLAYER DIES) =====
+for(let b of bots){
+    for(let p of b.body){
+        let dx = snake.x - p.x;
+        let dy = snake.y - p.y;
+
+        if(Math.sqrt(dx*dx+dy*dy) < 8){
+            die();
+        }
+    }
+}
+
+// ===== PLAYER KILLS BOTS =====
+for(let bi=0; bi<bots.length; bi++){
+    let b = bots[bi];
+
+    for(let p of snake.body){
+        let dx = b.x - p.x;
+        let dy = b.y - p.y;
+
+        if(Math.sqrt(dx*dx+dy*dy) < 8){
+            bots.splice(bi,1);
+            coins += 2;
+            save();
+            break;
+        }
+    }
+}
+
+// DRAW
+ctx.clearRect(0,0,canvas.width,canvas.height);
+
+// FOOD
+ctx.fillStyle="lime";
+for(let f of food){
+    ctx.fillRect(f.x,f.y,5,5);
+}
+
+// PLAYER
+drawSnake(snake.body, skin);
+
+// BOTS
+for(let b of bots){
+    drawSnake(b.body, b.color);
+}
+
+// HUD
+document.getElementById("hudCoins").innerText = coins;
+
+requestAnimationFrame(loop);
+}
+
+// ===== DRAW SNAKE =====
+function drawSnake(body,color){
+    ctx.fillStyle = color;
+    for(let p of body){
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,6,0,Math.PI*2);
+        ctx.fill();
+    }
+}
+
+</script>
+
+</body>
+  </html>
