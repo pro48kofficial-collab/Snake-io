@@ -99,7 +99,6 @@ canvas {
     <button onclick="buySkin('red',20)">Red (20)</button>
     <button onclick="buySkin('yellow',30)">Yellow (30)</button>
     <button onclick="buySkin('purple',40)">Purple (40)</button>
-    <button onclick="buySkin('lime',50)">Lime (50)</button>
 
     <button onclick="backMenu()">Назад</button>
 </div>
@@ -140,7 +139,7 @@ if(avatar){
     document.getElementById("avatarPreview").style.display = "block";
 }
 
-// nickname save
+// nickname
 document.getElementById("nickname").oninput = e=>{
     localStorage.setItem("nickname", e.target.value);
 };
@@ -192,17 +191,46 @@ function save(){
     document.getElementById("coins").innerText = coins;
 }
 
-// ===== GAME =====
+// ===== GAME STATE =====
 let snake, food, bots;
-let alive = true;
 let running = false;
+let alive = true;
 
 let camera = {x:0,y:0};
 
+// ===== CONTROL =====
+let turnLeft = false;
+let turnRight = false;
+let targetAngle = 0;
+
+// keyboard
+document.addEventListener("keydown", e=>{
+    if(e.key === "ArrowLeft" || e.key === "a") turnLeft = true;
+    if(e.key === "ArrowRight" || e.key === "d") turnRight = true;
+});
+document.addEventListener("keyup", e=>{
+    if(e.key === "ArrowLeft" || e.key === "a") turnLeft = false;
+    if(e.key === "ArrowRight" || e.key === "d") turnRight = false;
+});
+
+// mouse
+document.addEventListener("mousemove", e=>{
+    if(!snake) return;
+    targetAngle = Math.atan2(e.clientY - snake.y, e.clientX - snake.x);
+});
+
+// touch
+document.addEventListener("touchmove", e=>{
+    if(!snake) return;
+    let t = e.touches[0];
+    targetAngle = Math.atan2(t.clientY - snake.y, t.clientX - snake.x);
+});
+
+// ===== INIT =====
 function initGame(){
 
-alive = true;
 running = true;
+alive = true;
 
 snake = {
     x: 300,
@@ -212,7 +240,7 @@ snake = {
 };
 
 food = [];
-for(let i=0;i<70;i++){
+for(let i=0;i<80;i++){
     food.push({
         x: Math.random()*2000,
         y: Math.random()*2000
@@ -220,9 +248,9 @@ for(let i=0;i<70;i++){
 }
 
 bots = [];
-let colors = ["red","yellow","purple","orange","blue","lime","pink","cyan"];
+let colors = ["red","yellow","purple","orange","blue","lime"];
 
-for(let i=0;i<8;i++){
+for(let i=0;i<7;i++){
     bots.push({
         x: Math.random()*2000,
         y: Math.random()*2000,
@@ -242,12 +270,6 @@ function exitGame(){
     menu.classList.add("active");
 }
 
-// ===== CONTROL =====
-document.addEventListener("mousemove", e=>{
-    if(!running) return;
-    snake.angle = Math.atan2(e.clientY - snake.y, e.clientX - snake.x);
-});
-
 // ===== DIE =====
 function die(){
     alive = false;
@@ -264,14 +286,20 @@ function loop(){
 if(!running) return;
 if(!alive) return;
 
-// MOVE PLAYER
+// CONTROL
+if(turnLeft) snake.angle -= 0.05;
+if(turnRight) snake.angle += 0.05;
+
+snake.angle += (targetAngle - snake.angle) * 0.08;
+
+// MOVE
 snake.x += Math.cos(snake.angle)*3;
 snake.y += Math.sin(snake.angle)*3;
 
 snake.body.push({x:snake.x,y:snake.y});
 if(snake.body.length > 60) snake.body.shift();
 
-// CAMERA FOLLOW
+// CAMERA
 camera.x = snake.x - canvas.width/2;
 camera.y = snake.y - canvas.height/2;
 
@@ -279,17 +307,13 @@ camera.y = snake.y - canvas.height/2;
 for(let i=0;i<food.length;i++){
     let f = food[i];
 
-    let dx = snake.x - f.x;
-    let dy = snake.y - f.y;
-
-    if(Math.hypot(dx,dy) < 12){
+    if(Math.hypot(snake.x-f.x,snake.y-f.y) < 12){
         food.splice(i,1);
         food.push({
             x: Math.random()*2000,
             y: Math.random()*2000
         });
 
-        snake.body.push({x:snake.x,y:snake.y});
         coins++;
         save();
     }
@@ -314,37 +338,22 @@ for(let b of bots){
     }
 }
 
-// KILL BOTS
-for(let i=0;i<bots.length;i++){
-    let b = bots[i];
-
-    for(let p of snake.body){
-        if(Math.hypot(b.x-p.x,b.y-p.y) < 8){
-            bots.splice(i,1);
-            coins += 3;
-            save();
-            break;
-        }
-    }
-}
-
 // DRAW
 ctx.clearRect(0,0,canvas.width,canvas.height);
 
-// translate camera
 ctx.save();
 ctx.translate(-camera.x,-camera.y);
 
-// FOOD
+// food
 ctx.fillStyle="lime";
 for(let f of food){
     ctx.fillRect(f.x,f.y,6,6);
 }
 
-// PLAYER
+// snake
 drawSnake(snake.body, skin);
 
-// BOTS
+// bots
 for(let b of bots){
     drawSnake(b.body, b.color);
 }
