@@ -23,7 +23,6 @@ body {
     justify-content: center;
     flex-direction: column;
 }
-
 .active { display: flex; }
 
 button {
@@ -64,6 +63,14 @@ canvas {
     left: 10px;
     z-index: 10;
 }
+
+#exitBtn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 20;
+    display: none;
+}
 </style>
 </head>
 
@@ -75,29 +82,30 @@ canvas {
 
     <img id="avatarPreview" style="display:none">
 
-    <input id="nickname" placeholder="Введи нік">
+    <input id="nickname" placeholder="Нік">
     <input type="file" id="avatarInput">
 
     <p>Coins: <span id="coins">0</span></p>
 
     <button onclick="startGame()">Грати</button>
-    <button onclick="openShop()">Магазин</button>
 </div>
 
 <!-- SHOP -->
 <div id="shop" class="screen">
-    <h2>Магазин</h2>
+    <h2>Магазин скінів</h2>
 
-    <button onclick="buySkin('cyan',10)">Cyan (10)</button>
-    <button onclick="buySkin('red',20)">Red (20)</button>
-    <button onclick="buySkin('yellow',30)">Yellow (30)</button>
-
+    <button onclick="buySkin('cyan',10)">Cyan</button>
+    <button onclick="buySkin('red',15)">Red</button>
+    <button onclick="buySkin('yellow',20)">Yellow</button>
+    <button onclick="buySkin('purple',25)">Purple</button>
+    <button onclick="buySkin('lime',30)">Lime</button>
     <button onclick="backMenu()">Назад</button>
 </div>
 
 <!-- GAME -->
 <div id="game" class="screen">
     <div id="hud">Coins: <span id="hudCoins"></span></div>
+    <button id="exitBtn" onclick="exitGame()">Вийти</button>
     <canvas id="canvas"></canvas>
 </div>
 
@@ -116,40 +124,21 @@ canvas.height = window.innerHeight;
 // ===== SAVE =====
 let coins = +localStorage.getItem("coins") || 0;
 let skin = localStorage.getItem("skin") || "cyan";
-let nickname = localStorage.getItem("nickname") || "";
 
 document.getElementById("coins").innerText = coins;
-document.getElementById("nickname").value = nickname;
 
-// avatar
+// ===== PROFILE =====
 let avatar = localStorage.getItem("avatar");
 if(avatar){
     document.getElementById("avatarPreview").src = avatar;
     document.getElementById("avatarPreview").style.display = "block";
 }
 
-// nickname save
-document.getElementById("nickname").oninput = e=>{
-    localStorage.setItem("nickname", e.target.value);
-};
-
-// avatar upload
-document.getElementById("avatarInput").onchange = e=>{
-    let file = e.target.files[0];
-    let reader = new FileReader();
-    reader.onload = function(){
-        avatar = reader.result;
-        localStorage.setItem("avatar", avatar);
-        document.getElementById("avatarPreview").src = avatar;
-        document.getElementById("avatarPreview").style.display = "block";
-    }
-    reader.readAsDataURL(file);
-};
-
 // ===== NAV =====
 function startGame(){
     menu.classList.remove("active");
     game.classList.add("active");
+    document.getElementById("exitBtn").style.display = "block";
     initGame();
 }
 
@@ -163,6 +152,14 @@ function backMenu(){
     menu.classList.add("active");
 }
 
+// ===== EXIT =====
+function exitGame(){
+    alive = false;
+    game.classList.remove("active");
+    menu.classList.add("active");
+    document.getElementById("exitBtn").style.display = "none";
+}
+
 // ===== SHOP =====
 function buySkin(color, price){
     if(coins >= price){
@@ -170,7 +167,7 @@ function buySkin(color, price){
         skin = color;
         save();
         alert("Куплено!");
-    } else alert("Нема коінів");
+    } else alert("Немає коінів");
 }
 
 // ===== SAVE =====
@@ -183,8 +180,10 @@ function save(){
 // ===== GAME STATE =====
 let snake, food, bots;
 let alive = true;
+let cameraX = 0;
+let cameraY = 0;
 
-// ===== INIT GAME =====
+// ===== INIT =====
 function initGame(){
 
 alive = true;
@@ -197,21 +196,22 @@ snake = {
 };
 
 food = [];
-for(let i=0;i<70;i++){
+for(let i=0;i<100;i++){
     food.push({
-        x: Math.random()*canvas.width,
-        y: Math.random()*canvas.height
+        x: Math.random()*2000,
+        y: Math.random()*2000
     });
 }
 
 bots = [];
-for(let i=0;i<6;i++){
+let colors = ["red","yellow","purple","orange","blue","pink","lime"];
+for(let i=0;i<8;i++){
     bots.push({
-        x: Math.random()*canvas.width,
-        y: Math.random()*canvas.height,
+        x: Math.random()*2000,
+        y: Math.random()*2000,
         angle: Math.random()*Math.PI*2,
         body: [],
-        color: ["red","yellow","purple","orange","blue"][i]
+        color: colors[i]
     });
 }
 
@@ -223,20 +223,15 @@ document.addEventListener("mousemove", e=>{
     snake.angle = Math.atan2(e.clientY - snake.y, e.clientX - snake.x);
 });
 
-document.addEventListener("touchmove", e=>{
-    let t = e.touches[0];
-    snake.angle = Math.atan2(t.clientY - snake.y, t.clientX - snake.x);
-});
-
-// ===== DIE PLAYER =====
+// ===== DIE =====
 function die(){
     alive = false;
     coins += 10;
     save();
 
     setTimeout(()=>{
+        exitGame();
         alert("Ти помер 💀 +10 коінів");
-        backMenu();
     },200);
 }
 
@@ -250,7 +245,11 @@ snake.x += Math.cos(snake.angle)*3;
 snake.y += Math.sin(snake.angle)*3;
 
 snake.body.push({x:snake.x,y:snake.y});
-if(snake.body.length > 50) snake.body.shift();
+if(snake.body.length > 60) snake.body.shift();
+
+// CAMERA FOLLOW PLAYER
+cameraX = snake.x - canvas.width/2;
+cameraY = snake.y - canvas.height/2;
 
 // FOOD
 for(let i=0;i<food.length;i++){
@@ -258,11 +257,11 @@ for(let i=0;i<food.length;i++){
     let dx = snake.x - f.x;
     let dy = snake.y - f.y;
 
-    if(Math.sqrt(dx*dx+dy*dy) < 10){
+    if(Math.sqrt(dx*dx+dy*dy)<10){
         food.splice(i,1);
         food.push({
-            x: Math.random()*canvas.width,
-            y: Math.random()*canvas.height
+            x: Math.random()*2000,
+            y: Math.random()*2000
         });
 
         snake.body.push({x:snake.x,y:snake.y});
@@ -271,31 +270,29 @@ for(let i=0;i<food.length;i++){
     }
 }
 
-// BOT MOVE
-for(let i=0;i<bots.length;i++){
-    let b = bots[i];
-
+// BOTS
+for(let b of bots){
     b.angle += (Math.random()-0.5)*0.2;
     b.x += Math.cos(b.angle)*2;
     b.y += Math.sin(b.angle)*2;
 
     b.body.push({x:b.x,y:b.y});
-    if(b.body.length > 35) b.body.shift();
+    if(b.body.length>40) b.body.shift();
 }
 
-// ===== COLLISION (PLAYER DIES) =====
+// COLLISION (PLAYER DIES)
 for(let b of bots){
-    for(let p of b.body){
+    forlet(p of b.body){
         let dx = snake.x - p.x;
         let dy = snake.y - p.y;
 
-        if(Math.sqrt(dx*dx+dy*dy) < 8){
+        if(Math.sqrt(dx*dx+dy*dy)<8){
             die();
         }
     }
 }
 
-// ===== PLAYER KILLS BOTS =====
+// BOT DEATH
 for(let bi=0; bi<bots.length; bi++){
     let b = bots[bi];
 
@@ -303,7 +300,7 @@ for(let bi=0; bi<bots.length; bi++){
         let dx = b.x - p.x;
         let dy = b.y - p.y;
 
-        if(Math.sqrt(dx*dx+dy*dy) < 8){
+        if(Math.sqrt(dx*dx+dy*dy)<8){
             bots.splice(bi,1);
             coins += 2;
             save();
@@ -318,7 +315,7 @@ ctx.clearRect(0,0,canvas.width,canvas.height);
 // FOOD
 ctx.fillStyle="lime";
 for(let f of food){
-    ctx.fillRect(f.x,f.y,5,5);
+    ctx.fillRect(f.x-cameraX,f.y-cameraY,5,5);
 }
 
 // PLAYER
@@ -329,18 +326,18 @@ for(let b of bots){
     drawSnake(b.body, b.color);
 }
 
-// HUD
 document.getElementById("hudCoins").innerText = coins;
 
 requestAnimationFrame(loop);
 }
 
-// ===== DRAW SNAKE =====
+// ===== DRAW =====
 function drawSnake(body,color){
     ctx.fillStyle = color;
+
     for(let p of body){
         ctx.beginPath();
-        ctx.arc(p.x,p.y,6,0,Math.PI*2);
+        ctx.arc(p.x-cameraX, p.y-cameraY, 6, 0, Math.PI*2);
         ctx.fill();
     }
 }
@@ -348,4 +345,4 @@ function drawSnake(body,color){
 </script>
 
 </body>
-  </html>
+    </html>
