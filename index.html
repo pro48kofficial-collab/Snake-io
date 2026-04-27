@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Snake Battle FIX</title>
+<title>Snake Battle Arena</title>
 
 <style>
 body {
@@ -23,6 +23,7 @@ body {
     justify-content: center;
     flex-direction: column;
 }
+
 .active { display: flex; }
 
 button {
@@ -32,6 +33,7 @@ button {
     border-radius: 10px;
     background: #1e90ff;
     color: white;
+    font-size: 16px;
 }
 
 input {
@@ -45,9 +47,9 @@ input {
     width: 80px;
     height: 80px;
     border-radius: 50%;
-    object-fit: cover;
     margin: 10px;
     border: 2px solid white;
+    object-fit: cover;
 }
 
 canvas {
@@ -62,6 +64,13 @@ canvas {
     left: 10px;
     z-index: 10;
 }
+
+#exitBtn{
+    position:absolute;
+    top:10px;
+    right:10px;
+    z-index:11;
+}
 </style>
 </head>
 
@@ -69,7 +78,6 @@ canvas {
 
 <!-- MENU -->
 <div id="menu" class="screen active">
-
     <h2>🐍 Snake Battle</h2>
 
     <img id="avatarPreview" style="display:none">
@@ -81,27 +89,26 @@ canvas {
 
     <button onclick="startGame()">Грати</button>
     <button onclick="openShop()">Магазин</button>
-
 </div>
 
 <!-- SHOP -->
 <div id="shop" class="screen">
-    <h2>🛒 Магазин</h2>
+    <h2>Магазин</h2>
 
-    <button onclick="buySkin('cyan',10)">Cyan</button>
-    <button onclick="buySkin('red',20)">Red</button>
-    <button onclick="buySkin('yellow',30)">Yellow</button>
+    <button onclick="buySkin('cyan',10)">Cyan (10)</button>
+    <button onclick="buySkin('red',20)">Red (20)</button>
+    <button onclick="buySkin('yellow',30)">Yellow (30)</button>
+    <button onclick="buySkin('purple',40)">Purple (40)</button>
+    <button onclick="buySkin('lime',50)">Lime (50)</button>
 
     <button onclick="backMenu()">Назад</button>
 </div>
 
 <!-- GAME -->
 <div id="game" class="screen">
-
     <div id="hud">Coins: <span id="hudCoins"></span></div>
-
+    <button id="exitBtn" onclick="exitGame()">Вийти</button>
     <canvas id="canvas"></canvas>
-
 </div>
 
 <script>
@@ -113,41 +120,41 @@ const game = document.getElementById("game");
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+function resize(){
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.addEventListener("resize", resize);
+resize();
 
-// ===== DATA =====
+// ===== SAVE =====
 let coins = +localStorage.getItem("coins") || 0;
 let skin = localStorage.getItem("skin") || "cyan";
-let nickname = localStorage.getItem("nickname") || "";
 
 document.getElementById("coins").innerText = coins;
-document.getElementById("nickname").value = nickname;
 
-// ===== AVATAR =====
+// avatar
 let avatar = localStorage.getItem("avatar");
-
 if(avatar){
     document.getElementById("avatarPreview").src = avatar;
     document.getElementById("avatarPreview").style.display = "block";
 }
 
-// ===== INPUTS =====
+// nickname save
 document.getElementById("nickname").oninput = e=>{
     localStorage.setItem("nickname", e.target.value);
 };
 
+// avatar upload
 document.getElementById("avatarInput").onchange = e=>{
     let file = e.target.files[0];
     let reader = new FileReader();
-
     reader.onload = function(){
         avatar = reader.result;
         localStorage.setItem("avatar", avatar);
         document.getElementById("avatarPreview").src = avatar;
         document.getElementById("avatarPreview").style.display = "block";
     }
-
     reader.readAsDataURL(file);
 };
 
@@ -186,11 +193,16 @@ function save(){
 }
 
 // ===== GAME =====
-let snake, food, cameraX=0, cameraY=0, alive=true;
+let snake, food, bots;
+let alive = true;
+let running = false;
+
+let camera = {x:0,y:0};
 
 function initGame(){
 
 alive = true;
+running = true;
 
 snake = {
     x: 300,
@@ -200,18 +212,39 @@ snake = {
 };
 
 food = [];
-for(let i=0;i<80;i++){
+for(let i=0;i<70;i++){
     food.push({
         x: Math.random()*2000,
         y: Math.random()*2000
     });
 }
 
+bots = [];
+let colors = ["red","yellow","purple","orange","blue","lime","pink","cyan"];
+
+for(let i=0;i<8;i++){
+    bots.push({
+        x: Math.random()*2000,
+        y: Math.random()*2000,
+        angle: Math.random()*Math.PI*2,
+        body: [],
+        color: colors[i]
+    });
+}
+
 requestAnimationFrame(loop);
+}
+
+// ===== EXIT =====
+function exitGame(){
+    running = false;
+    game.classList.remove("active");
+    menu.classList.add("active");
 }
 
 // ===== CONTROL =====
 document.addEventListener("mousemove", e=>{
+    if(!running) return;
     snake.angle = Math.atan2(e.clientY - snake.y, e.clientX - snake.x);
 });
 
@@ -222,26 +255,25 @@ function die(){
     save();
 
     setTimeout(()=>{
-        backMenu();
-        alert("Ти помер 💀 +10 коінів");
-    },100);
+        exitGame();
+    },300);
 }
 
 // ===== LOOP =====
 function loop(){
-
+if(!running) return;
 if(!alive) return;
 
-// MOVE
+// MOVE PLAYER
 snake.x += Math.cos(snake.angle)*3;
 snake.y += Math.sin(snake.angle)*3;
 
 snake.body.push({x:snake.x,y:snake.y});
-if(snake.body.length>60) snake.body.shift();
+if(snake.body.length > 60) snake.body.shift();
 
-// CAMERA
-cameraX = snake.x - canvas.width/2;
-cameraY = snake.y - canvas.height/2;
+// CAMERA FOLLOW
+camera.x = snake.x - canvas.width/2;
+camera.y = snake.y - canvas.height/2;
 
 // FOOD
 for(let i=0;i<food.length;i++){
@@ -250,7 +282,7 @@ for(let i=0;i<food.length;i++){
     let dx = snake.x - f.x;
     let dy = snake.y - f.y;
 
-    if(Math.sqrt(dx*dx+dy*dy)<10){
+    if(Math.hypot(dx,dy) < 12){
         food.splice(i,1);
         food.push({
             x: Math.random()*2000,
@@ -263,26 +295,76 @@ for(let i=0;i<food.length;i++){
     }
 }
 
+// BOTS
+for(let b of bots){
+    b.angle += (Math.random()-0.5)*0.2;
+    b.x += Math.cos(b.angle)*2;
+    b.y += Math.sin(b.angle)*2;
+
+    b.body.push({x:b.x,y:b.y});
+    if(b.body.length > 40) b.body.shift();
+}
+
+// COLLISION
+for(let b of bots){
+    for(let p of b.body){
+        if(Math.hypot(snake.x-p.x,snake.y-p.y) < 8){
+            die();
+        }
+    }
+}
+
+// KILL BOTS
+for(let i=0;i<bots.length;i++){
+    let b = bots[i];
+
+    for(let p of snake.body){
+        if(Math.hypot(b.x-p.x,b.y-p.y) < 8){
+            bots.splice(i,1);
+            coins += 3;
+            save();
+            break;
+        }
+    }
+}
+
 // DRAW
 ctx.clearRect(0,0,canvas.width,canvas.height);
 
+// translate camera
+ctx.save();
+ctx.translate(-camera.x,-camera.y);
+
 // FOOD
 ctx.fillStyle="lime";
-food.forEach(f=>{
-    ctx.fillRect(f.x-cameraX,f.y-cameraY,5,5);
-});
+for(let f of food){
+    ctx.fillRect(f.x,f.y,6,6);
+}
 
-// SNAKE
-ctx.fillStyle=skin;
-snake.body.forEach(p=>{
-    ctx.beginPath();
-    ctx.arc(p.x-cameraX,p.y-cameraY,6,0,Math.PI*2);
-    ctx.fill();
-});
+// PLAYER
+drawSnake(snake.body, skin);
 
+// BOTS
+for(let b of bots){
+    drawSnake(b.body, b.color);
+}
+
+ctx.restore();
+
+// HUD
 document.getElementById("hudCoins").innerText = coins;
 
 requestAnimationFrame(loop);
+}
+
+// ===== DRAW =====
+function drawSnake(body,color){
+    ctx.fillStyle = color;
+    for(let p of body){
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,6,0,Math.PI*2);
+        ctx.fill();
+    }
 }
 
 </script>
